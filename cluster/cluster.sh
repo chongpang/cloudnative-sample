@@ -111,6 +111,9 @@ if [ "$action" = "start" ]; then
 
   echo Cluster ${cluser_name} is ready.
 
+  # create namespace
+  kubectl create namespace develop
+
 elif [ "$action" = "delete" ]; then
 
 	echo Deleting cluster ${cluser_name} ...

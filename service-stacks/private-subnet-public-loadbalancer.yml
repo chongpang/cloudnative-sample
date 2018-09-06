@@ -3,7 +3,7 @@ Description: Deploy a service on AWS Fargate, hosted in a private subnet, but ac
 Parameters:
   StackName:
     Type: String
-    Default: production
+    Default: develop
     Description: The name of the parent Fargate networking stack that you created. Necessary
                  to locate and reference resources created by that stack.
   ServiceName:

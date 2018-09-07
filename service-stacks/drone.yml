@@ -1,21 +1,23 @@
 #Description: Drone Continuous Integration (drone.io)
 Parameters:
-  VPC:
-    Type: AWS::EC2::VPC::Id
-    Description: The VPC that needs provisioning
-  Subnets:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: The subnets that the load balancer will cover
+  StackName:
+    Type: String
+    Default: develop
+    Description: The name of the parent Fargate networking stack that you created. Necessary
+                 to locate and reference resources created by that stack.
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an AWS keypair to use on instances
+    Default: develop
   DroneRemoteConfig:
     Type: String
     Description: The remote config value for Drone
     NoEcho: true
+    default: https://github.com?client_id=&client_secret=&open=true
   DroneRemoteDriver:
     Type: String
     Description: The remote driver value for Drone
+    default: github
   DroneMemoryAllocation:
     Type: Number
     Description: The amount of memory to allocate to the Drone container
@@ -91,7 +93,8 @@ Resources:
     Properties:
       GroupDescription: Security associated to the Drone load balancer
       VpcId:
-        Ref: VPC
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'VPCId']]
       SecurityGroupIngress:
       - FromPort: 80
         ToPort: 80
@@ -181,7 +184,10 @@ Resources:
     Properties:
       CrossZone: true
       Subnets:
-        Ref: Subnets
+      - Fn::ImportValue:
+        !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+      - Fn::ImportValue:
+        !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
       Listeners:
       - InstancePort: '80'
         InstanceProtocol: HTTP

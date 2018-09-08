@@ -13,11 +13,11 @@ Parameters:
     Type: String
     Description: The remote config value for Drone
     NoEcho: true
-    default: https://github.com?client_id=&client_secret=&open=true
+    Default: https://github.com?client_id=&client_secret=&open=true
   DroneRemoteDriver:
     Type: String
     Description: The remote driver value for Drone
-    default: github
+    Default: github
   DroneMemoryAllocation:
     Type: Number
     Description: The amount of memory to allocate to the Drone container
@@ -115,7 +115,8 @@ Resources:
           Ref: LoadBalancerSecurityGroup
         ToPort: 80
       VpcId:
-        Ref: VPC
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'VPCId']]
       Tags:
       - Key: Name
         Value: droneci-instance-sg
@@ -184,10 +185,10 @@ Resources:
     Properties:
       CrossZone: true
       Subnets:
-      - Fn::ImportValue:
-        !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
-      - Fn::ImportValue:
-        !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
       Listeners:
       - InstancePort: '80'
         InstanceProtocol: HTTP
@@ -295,7 +296,10 @@ Resources:
       LaunchConfigurationName:
         Ref: LaunchConfiguration
       VPCZoneIdentifier:
-        Ref: Subnets
+      - Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+      - Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
       Tags:
       - Key: Name
         Value: droneci

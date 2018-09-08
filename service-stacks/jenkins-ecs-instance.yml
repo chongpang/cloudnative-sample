@@ -5,6 +5,11 @@ Description: AWS CloudFormation Sample Template Create a load balanced Jenkins C
   This template creates an Amazon EC2 instance in an Autoscaling group. You will be
   billed for the AWS resources used if you create a stack from this template.
 Parameters:
+  StackName:
+    Type: String
+    Default: develop
+    Description: The name of the parent Fargate networking stack that you created. Necessary
+                 to locate and reference resources created by that stack.
   InstanceType:
     Description: WebServer EC2 instance type
     Type: String
@@ -193,16 +198,11 @@ Resources:
   WebServerGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AvailabilityZones:
-      - Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-AZ1"
-      - Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-AZ2"
       VPCZoneIdentifier:
       - Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-SubnetA"
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
       - Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-SubnetB"
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
       LaunchConfigurationName:
         Ref: LaunchConfig
       MinSize: '1'
@@ -415,9 +415,7 @@ Resources:
                 files:
                 - "/etc/awslogs/awslogs.conf"
     Properties:
-      KeyName:
-        Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-KeyName"
+      KeyName: develop
       ImageId:
         Fn::FindInMap:
         - AWSRegionArch2AMI
@@ -492,7 +490,7 @@ Resources:
       GroupDescription: Enable SSH access and HTTP from anywhere
       VpcId:
         Fn::ImportValue:
-          Fn::Sub: "${EcsStackName}-VPCID"
+          !Join [':', [!Ref 'StackName', 'VPCId']]
       SecurityGroupIngress:
       - IpProtocol: tcp
         FromPort: '22'

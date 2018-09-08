@@ -1,9 +1,7 @@
----
-AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS CloudFormation Sample Template Create a load balanced Jenkins CI
-  server with Docker installed. The application is using CloudWatch logs **WARNING**
-  This template creates an Amazon EC2 instance in an Autoscaling group. You will be
-  billed for the AWS resources used if you create a stack from this template.
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Creates a VPC containing an ECS cluster and Jenkins ECS service (and proxy to
+  view Jenkins externally)
 Parameters:
   StackName:
     Type: String
@@ -11,493 +9,528 @@ Parameters:
     Description: The name of the parent Fargate networking stack that you created. Necessary
                  to locate and reference resources created by that stack.
   InstanceType:
-    Description: WebServer EC2 instance type
     Type: String
+    Description: EC2 instance type
     Default: t2.medium
     AllowedValues:
-    - t1.micro
-    - t2.micro
-    - t2.small
-    - t2.medium
-    - m3.medium
-    - m3.large
-    - m3.xlarge
-    - m3.2xlarge
-    - c3.large
-    - c3.xlarge
-    - c3.2xlarge
-    - c3.4xlarge
-    - c3.8xlarge
-    - c4.large
-    - c4.xlarge
-    - c4.2xlarge
-    - c4.4xlarge
-    - c4.8xlarge
-    - r3.large
-    - r3.xlarge
-    - r3.2xlarge
-    - r3.4xlarge
-    - r3.8xlarge
-    - i2.xlarge
-    - i2.2xlarge
-    - i2.4xlarge
-    - i2.8xlarge
-    - hi1.4xlarge
-    - hs1.8xlarge
-    - cr1.8xlarge
-    - cc2.8xlarge
-    ConstraintDescription: must be a valid EC2 instance type.
-  EcsStackName:
-    Description: Name of an active CloudFormation stack that contains the ecs resources,
-      such as the subnet and security group, that will be used in this stack.
-    Type: String
-    MinLength: 1
-    MaxLength: 255
-    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+    ConstraintDescription: >-
+      must be a general purpose (T2 or M4) EC2 instance type, equal to or larger
+      than a "t2.small".
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Key pair to log into EC2 instances
     Default: develop
-  SSHLocation:
-    Description: The IP address range that can be used to SSH to the EC2 instances
+  PublicAccessCIDR:
     Type: String
-    MinLength: '9'
-    MaxLength: '18'
+    Description: >-
+      CIDR block that will have access to AWS resources. Use
+      http://checkip.amazonaws.com/ to get your current IP Address.
+    AllowedPattern: \d+\.\d+\.\d+\.\d+/\d+
     Default: 0.0.0.0/0
-    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
-    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
 Mappings:
-  AWSInstanceType2Arch:
-    t1.micro:
-      Arch: PV64
-    t2.micro:
-      Arch: HVM64
-    t2.small:
-      Arch: HVM64
-    t2.medium:
-      Arch: HVM64
-    m3.medium:
-      Arch: HVM64
-    m3.large:
-      Arch: HVM64
-    m3.xlarge:
-      Arch: HVM64
-    m3.2xlarge:
-      Arch: HVM64
-    c3.large:
-      Arch: HVM64
-    c3.xlarge:
-      Arch: HVM64
-    c3.2xlarge:
-      Arch: HVM64
-    c3.4xlarge:
-      Arch: HVM64
-    c3.8xlarge:
-      Arch: HVM64
-    c4.large:
-      Arch: HVM64
-    c4.xlarge:
-      Arch: HVM64
-    c4.2xlarge:
-      Arch: HVM64
-    c4.4xlarge:
-      Arch: HVM64
-    c4.8xlarge:
-      Arch: HVM64
-    r3.large:
-      Arch: HVM64
-    r3.xlarge:
-      Arch: HVM64
-    r3.2xlarge:
-      Arch: HVM64
-    r3.4xlarge:
-      Arch: HVM64
-    r3.8xlarge:
-      Arch: HVM64
-    i2.xlarge:
-      Arch: HVM64
-    i2.2xlarge:
-      Arch: HVM64
-    i2.4xlarge:
-      Arch: HVM64
-    i2.8xlarge:
-      Arch: HVM64
-    hi1.4xlarge:
-      Arch: HVM64
-    hs1.8xlarge:
-      Arch: HVM64
-    cr1.8xlarge:
-      Arch: HVM64
-    cc2.8xlarge:
-      Arch: HVM64
-  AWSRegionArch2AMI:
+  RegionAmazonECSOptimizedAMIMapping:
     us-east-1:
-      PV64: ami-f0ea638a
-      HVM64: ami-55ef662f
-    us-west-2:
-      PV64: ami-da4694a2
-      HVM64: ami-bf4193c7
+      AMI: ami-52cd5445
     us-west-1:
-      PV64: ami-3b1e265b
-      HVM64: ami-a51f27c5
+      AMI: ami-efa1e28f
+    us-west-2:
+      AMI: ami-a426edc4
     eu-west-1:
-      PV64: ami-889622f1
-      HVM64: ami-1a962263
+      AMI: ami-7b244e08
     eu-central-1:
-      PV64: ami-2928ab46
-      HVM64: ami-bf2ba8d0
+      AMI: ami-721aec1d
     ap-northeast-1:
-      PV64: ami-99982aff
-      HVM64: ami-da9e2cbc
+      AMI: ami-058a4964
     ap-southeast-1:
-      PV64: ami-3f3d6a5c
-      HVM64: ami-c63d6aa5
+      AMI: ami-0d9f466e
     ap-southeast-2:
-      PV64: ami-3249a250
-      HVM64: ami-ff4ea59d
-    sa-east-1:
-      PV64: ami-b96c29d5
-      HVM64: ami-286f2a44
+      AMI: ami-7df2c61e
 Resources:
-  CloudFormationLogs:
-    Type: AWS::Logs::LogGroup
+  ECSAutoScalingGroup:
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
     Properties:
-      RetentionInDays: 7
-  JenkinsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - ec2.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/AmazonEC2ContainerServiceFullAccess
-      - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
-      Path: "/"
-      Policies:
-      - PolicyName: JenkinsRolePolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - logs:*
-            Resource:
-            - arn:aws:logs:*:*:*
-          - Effect: Allow
-            Action: ecs:*
-            Resource: "*"
-  JenkinsInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: "/"
-      Roles:
-      - Ref: JenkinsRole
-  WebServerGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
+      DesiredCapacity: 2
+      LaunchConfigurationName: !Ref ECSLaunchConfig
+      MaxSize: 2
+      MinSize: 2
       VPCZoneIdentifier:
       - Fn::ImportValue:
           !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
       - Fn::ImportValue:
           !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
-      LaunchConfigurationName:
-        Ref: LaunchConfig
-      MinSize: '1'
-      MaxSize: '1'
-  LaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
-    Metadata:
-      Comment: Install a simple application
-      AWS::CloudFormation::Init:
-        configSets:
-          install_all:
-          - install_cfn
-          - install_base
-          - install_nginx
-          - install_logs
-        install_cfn:
-          files:
-            "/etc/cfn/cfn-hup.conf":
-              content:
-                Fn::Join:
-                - ''
-                - - "[main]\n"
-                  - stack=
-                  - Ref: AWS::StackId
-                  - "\n"
-                  - region=
-                  - Ref: AWS::Region
-                  - "\n"
-              mode: '000400'
-              owner: root
-              group: root
-            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
-              content:
-                Fn::Join:
-                - ''
-                - - "[cfn-auto-reloader-hook]\n"
-                  - 'triggers=post.update'
-                  - 'path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init'
-                  - 'action=/opt/aws/bin/cfn-init -v '
-                  - "         --stack "
-                  - Ref: AWS::StackName
-                  - "         --resource WebServerInstance "
-                  - "         --configsets install_all "
-                  - "         --region "
-                  - Ref: AWS::Region
-                  - "\n"
-                  - 'runas=root'
-          services:
-            sysvinit:
-              cfn-hup:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files:
-                - "/etc/cfn/cfn-hup.conf"
-                - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
-        install_base:
-          packages:
-            yum:
-              git: []
-              docker: []
-              httpd-tools: []
-              jq: []
-              java-1.8.0-openjdk.x86_64: []
-          services:
-            sysvinit:
-              docker:
-                enabled: 'true'
-                ensureRunning: 'true'
-        install_nginx:
-          packages:
-            yum:
-              nginx: []
-          files:
-            "/etc/nginx/nginx.conf":
-              content:
-                Fn::Join:
-                - ''
-                - - 'user  nginx;'
-                  - "worker_processes  1;\n\n"
-                  - 'error_log  /var/log/nginx/error.log;'
-                  - "pid        /var/run/nginx.pid;\n\n"
-                  - 'events {'
-                  - "    worker_connections  1024;\n"
-                  - "}\n\n"
-                  - 'http {'
-                  - "    include       /etc/nginx/mime.types;\n"
-                  - "    default_type  application/octet-stream;\n"
-                  - '    log_format  main  ''$remote_addr - $remote_user [$time_local]
-                    "$request" '''
-                  - '                      ''$status $body_bytes_sent "$http_referer"
-                    '''
-                  - "                      '\"$http_user_agent\" \"$http_x_forwarded_for\"';\n\n"
-                  - "    access_log  /var/log/nginx/access.log  main;\n"
-                  - "    sendfile        on;\n"
-                  - "    keepalive_timeout  65;\n"
-                  - "    include /etc/nginx/conf.d/*.conf;\n"
-                  - "    index   index.html index.htm;\n"
-                  - "    server {\n"
-                  - "        listen       80;\n"
-                  - "        server_name  _;\n"
-                  - "        location / {\n"
-                  - "          proxy_pass              http://127.0.0.1:8080;\n"
-                  - "          proxy_set_header        Host $host;\n"
-                  - "          proxy_set_header        X-Real-IP $remote_addr;\n"
-                  - "          proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-                  - "          proxy_connect_timeout   150;\n"
-                  - "          proxy_send_timeout      100;\n"
-                  - "          proxy_read_timeout      100;\n"
-                  - "          proxy_buffers           4 32k;\n"
-                  - "          client_max_body_size    8m;\n"
-                  - "          client_body_buffer_size 128k;\n"
-                  - "        }\n"
-                  - "   }\n"
-                  - "}\n"
-              mode: '000444'
-              owner: root
-              group: root
-          services:
-            sysvinit:
-              nginx:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files:
-                - "/etc/nginx/nginx.conf"
-        install_logs:
-          packages:
-            yum:
-              awslogs: []
-          files:
-            "/etc/awslogs/awslogs.conf":
-              content:
-                Fn::Join:
-                - ''
-                - - "[general]\n"
-                  - 'state_file= /var/awslogs/state/agent-state'
-                  - "[/var/log/cloud-init.log]\n"
-                  - 'file = /var/log/cloud-init.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/cloud-init.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/cloud-init-output.log]\n"
-                  - 'file = /var/log/cloud-init-output.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/cloud-init-output.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/cfn-init.log]\n"
-                  - 'file = /var/log/cfn-init.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/cfn-init.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/cfn-hup.log]\n"
-                  - 'file = /var/log/cfn-hup.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/cfn-hup.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/cfn-wire.log]\n"
-                  - 'file = /var/log/cfn-wire.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/cfn-wire.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/nginx/access.log]\n"
-                  - 'file = /var/log/nginx/access.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/nginx-access.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/nginx/error.log]\n"
-                  - 'file = /var/log/nginx/error.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/nginx-error.log'
-                  - "datetime_format = \n"
-                  - "[/var/log/jenkins/jenkins.log]\n"
-                  - 'file = /var/log/jenkins/jenkins.log'
-                  - 'log_group_name = '
-                  - Ref: CloudFormationLogs
-                  - "\n"
-                  - 'log_stream_name = {instance_id}/jenkins.log'
-                  - "datetime_format = \n"
-              mode: '000444'
-              owner: root
-              group: root
-          commands:
-            01_create_state_directory:
-              command: mkdir -p /var/awslogs/state
-            02_change_log_region:
-              command:
-                Fn::Join:
-                - ''
-                - - 'sed -i ''s/region = us-east-1/region = '
-                  - Ref: AWS::Region
-                  - "/g' /etc/awslogs/awscli.conf"
-          services:
-            sysvinit:
-              awslogs:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files:
-                - "/etc/awslogs/awslogs.conf"
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: '1'
+        MinInstancesInService: '1'
+        PauseTime: PT5M
+        WaitOnResourceSignals: 'true'
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+  ECSLaunchConfig:
     Properties:
-      KeyName: develop
-      ImageId:
-        Fn::FindInMap:
-        - AWSRegionArch2AMI
-        - Ref: AWS::Region
-        - Fn::FindInMap:
-          - AWSInstanceType2Arch
-          - Ref: InstanceType
-          - Arch
-      BlockDeviceMappings:
-      - DeviceName: "/dev/xvda"
-        Ebs:
-          VolumeSize: '50'
-          VolumeType: gp2
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref ECSInstanceProfile
+      ImageId: !FindInMap 
+        - RegionAmazonECSOptimizedAMIMapping
+        - !Ref 'AWS::Region'
+        - AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPair
       SecurityGroups:
-      - Ref: InstanceSecurityGroup
-      InstanceType:
-        Ref: InstanceType
-      IamInstanceProfile:
-        Ref: JenkinsInstanceProfile
-      UserData:
-        Fn::Base64:
-          Fn::Join:
+        - !Ref ECSClusterSecurityGroup
+        - !Ref ECSContainerInstancesSecurityGroup
+      UserData: !Base64 
+        'Fn::Join':
           - ''
-          - - "#!/bin/bash -xe\n"
-            - 'yum update -y aws-cfn-bootstrap'
-            - "/opt/aws/bin/cfn-init -v "
-            - " --stack "
-            - Ref: AWS::StackName
-            - " --resource LaunchConfig "
-            - " --configsets install_all "
-            - " --region "
-            - Ref: AWS::Region
-            - "\n"
-            - 'yum remove -y java-1.7.0'
-            - "# Install Jenkins\n"
-            - 'wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo'
-            - 'rpm --import http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key'
-            - 'yum install -y jenkins'
-            - "# Add Jenkins user to Docker group\n"
-            - 'usermod -a -G docker jenkins'
-            - 'service jenkins start'
-            - 'chkconfig jenkins on'
-            - "# Update the AWS CLI to the latest version\n"
-            - 'yum update -y aws-cli'
-            - "# Wait 30 seconds to allow Jenkins to startup\n"
-            - 'echo "Waiting 30 seconds for Jenkins to start....."'
-            - 'sleep 30'
-            - "# Install the required plugins\n"
-            - 'cd /var/lib/jenkins/plugins'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/token-macro.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/docker-build-publish.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/multiple-scms.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/github-api.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/scm-api.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/git-client.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/github.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/git.hpi'
-            - 'curl -O -L https://updates.jenkins-ci.org/latest/dockerhub.hpi'
-            - 'chown jenkins:jenkins *.hpi'
-            - "# Restarting Jenkins\n"
-            - 'service jenkins restart'
-            - "/opt/aws/bin/cfn-signal -e $? "
-            - " --stack "
-            - Ref: AWS::StackName
-            - " --resource WebServerGroup "
-            - " --region "
-            - Ref: AWS::Region
-            - "\n"
-  InstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+          - - |
+              #!/bin/bash
+            - |
+              set -ex
+            - |
+              yum install -y aws-cfn-bootstrap
+            - '/opt/aws/bin/cfn-init -v '
+            - '  --stack '
+            - !Ref 'AWS::StackName'
+            - '  --resource ECSLaunchConfig'
+            - '  --region '
+            - !Ref 'AWS::Region'
+            - |+
+
+            - echo ECS_CLUSTER=
+            - Fn::ImportValue:
+                !Join [':', [!Ref 'StackName', 'ClusterName']]
+            - |2
+               >> /etc/ecs/ecs.config
+            - |
+              mkdir -p /mnt/efs
+            - >
+              aws_az="$(curl -s
+              http://169.254.169.254/latest/meta-data/placement/availability-zone)"
+            - |
+              aws_region="${aws_az:0:${#aws_az}-1}"
+            - 'echo "${aws_az}.'
+            - !Ref EFSFileSystem
+            - >
+              .efs.${aws_region}.amazonaws.com:/    /mnt/efs   nfs4    defaults"
+              >> /etc/fstab
+            - |
+              mount -a
+            - |
+              chmod -R 777 /mnt/efs
+            - |
+              service docker restart
+            - |
+              start ecs
+            - '/opt/aws/bin/cfn-signal -e $? '
+            - '  --stack '
+            - !Ref 'AWS::StackName'
+            - '  --resource ECSAutoScalingGroup'
+            - '  --region '
+            - !Ref 'AWS::Region'
+            - |+
+
+    Metadata:
+      'AWS::CloudFormation::Init':
+        config:
+          files:
+            /etc/nginx/nginx.conf:
+              content: !Join 
+                - ''
+                - - |
+                    events {
+                  - |2
+                      worker_connections 1024;
+                  - |
+                    }
+                  - |
+                    http {
+                  - |2
+                      server {
+                  - |2
+                        location / {
+                  - '      proxy_pass http://'
+                  - !GetAtt 
+                    - JenkinsLoadBalancer
+                    - DNSName
+                  - |
+                    ;
+                  - |2
+                          proxy_read_timeout 90;
+                  - |2
+                          proxy_redirect default;
+                  - |2
+                          proxy_set_header Host $host:$server_port;
+                  - |2
+                          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  - |2
+                          proxy_set_header X-Real-IP $remote_addr;
+                  - |2
+                        }
+                  - |2
+                      }
+                  - |
+                    }
+              mode: '000644'
+              owner: root
+              group: root
+          packages:
+            yum:
+              nfs-utils: []
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+  ECSClusterSecurityGroup:
     Properties:
-      GroupDescription: Enable SSH access and HTTP from anywhere
       VpcId:
         Fn::ImportValue:
           !Join [':', [!Ref 'StackName', 'VPCId']]
+      GroupDescription: >-
+        Self-referencing security group to allow all traffic between ECS
+        container instances and ELBs
+    Type: 'AWS::EC2::SecurityGroup'
+  ECSClusterSecurityGroupEgress:
+    Properties:
+      DestinationSecurityGroupId: !Ref ECSClusterSecurityGroup
+      FromPort: '-1'
+      GroupId: !Ref ECSClusterSecurityGroup
+      IpProtocol: '-1'
+      ToPort: '-1'
+    Type: 'AWS::EC2::SecurityGroupEgress'
+  ECSClusterSecurityGroupIngress:
+    Properties:
+      FromPort: '-1'
+      GroupId: !Ref ECSClusterSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref ECSClusterSecurityGroup
+      ToPort: '-1'
+    Type: 'AWS::EC2::SecurityGroupIngress'
+  ECSContainerInstancesSecurityGroup:
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'VPCId']]
+      GroupDescription: Security group for ECS container instances
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: '22'
-        ToPort: '22'
-        CidrIp:
-          Ref: SSHLocation
-      - IpProtocol: tcp
-        FromPort: '80'
-        ToPort: '80'
-        CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref PublicAccessCIDR
+    Type: 'AWS::EC2::SecurityGroup'
+  EFSMountTargetSecurityGroup:
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'VPCId']]
+      GroupDescription: >-
+        Security group to allow inbound NFS for EFS mount target from ECS
+        container instances
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '2049'
+          ToPort: '2049'
+          SourceSecurityGroupId: !Ref ECSContainerInstancesSecurityGroup
+    Type: 'AWS::EC2::SecurityGroup'
+  EFSFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value:
+            Fn::ImportValue:
+              !Join [':', [!Ref 'StackName', 'ClusterName']]
+      PerformanceMode: generalPurpose
+  EFSMountTarget1:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EFSMountTargetSecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+  EFSMountTarget2:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EFSMountTargetSecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']] 
+  ECSInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ECSInstanceRole
+    Type: 'AWS::IAM::InstanceProfile'
+  ECSInstanceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: AmazonEC2ContainerServiceforEC2Role
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+        - PolicyName: AmazonEC2ContainerServiceJenkinsPluginRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:DescribeContainerInstances'
+                  - 'ecs:ListClusters'
+                  - 'ecs:RegisterTaskDefinition'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ecs:RunTask'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:ecs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':task-definition/jenkins-slave:*'
+              - Effect: Allow
+                Action:
+                  - 'ecs:ListContainerInstances'
+                  - 'ecs:StopTask'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:ecs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':cluster/'
+                    - Fn::ImportValue:
+                        !Join [':', [!Ref 'StackName', 'ClusterName']]
+              - Effect: Allow
+                Action:
+                  - 'ecs:StopTask'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:ecs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':task/*'
+    Type: 'AWS::IAM::Role'
+  ECSServiceRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: AmazonEC2ContainerServiceRole
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                  - 'ec2:Describe*'
+                  - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                Resource: '*'
+    Type: 'AWS::IAM::Role'
+  JenkinsLoadBalancer:
+    Properties:
+      Subnets:
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
+      Scheme: internal
+      SecurityGroups:
+        - !Ref ECSClusterSecurityGroup
+      Listeners:
+        - InstancePort: '8080'
+          InstanceProtocol: HTTP
+          LoadBalancerPort: '80'
+          Protocol: HTTP
+        - InstancePort: '50000'
+          InstanceProtocol: TCP
+          LoadBalancerPort: '50000'
+          Protocol: TCP
+      HealthCheck:
+        HealthyThreshold: '2'
+        Interval: '30'
+        Target: 'HTTP:8080/'
+        Timeout: '5'
+        UnhealthyThreshold: '5'
+    Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
+  ProxyELBSecurityGroup:
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'VPCId']]
+      GroupDescription: Proxy ELB security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: !Ref PublicAccessCIDR
+    Type: 'AWS::EC2::SecurityGroup'
+  ProxyLoadBalancer:
+    Properties:
+      Subnets:
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetOne']]
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'PrivateSubnetTwo']]
+      SecurityGroups:
+        - !Ref ECSClusterSecurityGroup
+        - !Ref ProxyELBSecurityGroup
+      Listeners:
+        - InstancePort: '80'
+          InstanceProtocol: HTTP
+          LoadBalancerPort: '80'
+          Protocol: HTTP
+      HealthCheck:
+        HealthyThreshold: '2'
+        Interval: '30'
+        Target: 'HTTP:80/'
+        Timeout: '5'
+        UnhealthyThreshold: '5'
+    Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
+  JenkinsECSService:
+    Properties:
+      Cluster:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'ClusterName']]
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: jenkins
+          ContainerPort: '8080'
+          LoadBalancerName: !Ref JenkinsLoadBalancer
+      Role: !Ref ECSServiceRole
+      TaskDefinition: !Ref JenkinsTaskDefinition
+    Type: 'AWS::ECS::Service'
+  JenkinsTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Name: jenkins
+          Image: jenkins
+          Hostname: jenkins
+          Cpu: 512
+          Memory: 512
+          Environment:
+            - Name: JAVA_OPTS
+              Value: '-Djenkins.install.runSetupWizard=false'
+          Essential: true
+          MountPoints:
+            - ContainerPath: /var/jenkins_home
+              SourceVolume: efs-jenkins
+          PortMappings:
+            - HostPort: 8080
+              ContainerPort: 8080
+            - HostPort: 50000
+              ContainerPort: 50000
+      Volumes:
+        - Name: efs-jenkins
+          Host:
+            SourcePath: /mnt/efs
+    Type: 'AWS::ECS::TaskDefinition'
+  ProxyECSService:
+    Properties:
+      Cluster:
+        Fn::ImportValue:
+          !Join [':', [!Ref 'StackName', 'ClusterName']]
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: nginx
+          ContainerPort: '80'
+          LoadBalancerName: !Ref ProxyLoadBalancer
+      Role: !Ref ECSServiceRole
+      TaskDefinition: !Ref ProxyTaskDefinition
+    Type: 'AWS::ECS::Service'
+  ProxyTaskDefinition:
+    Properties:
+      ContainerDefinitions:
+        - Name: nginx
+          Image: nginx
+          Hostname: nginx
+          Cpu: 256
+          Memory: 256
+          Essential: true
+          MountPoints:
+            - ContainerPath: /etc/nginx/nginx.conf
+              SourceVolume: nginx-conf
+              ReadOnly: true
+          PortMappings:
+            - HostPort: 80
+              ContainerPort: 80
+      Volumes:
+        - Name: nginx-conf
+          Host:
+            SourcePath: /etc/nginx/nginx.conf
+    Type: 'AWS::ECS::TaskDefinition'
+Outputs:
+  JenkinsConfigurationAlternativeJenkinsURL:
+    Description: 'Jenkins configuration: "Alternative Jenkins URL"'
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - JenkinsLoadBalancer
+          - DNSName
+        - /
+  JenkinsConfigurationECSCluster:
+    Description: 'Jenkins configuration: "ECS Cluster"'
+    Value: !Join 
+      - ''
+      - - 'arn:aws:ecs:'
+        - !Ref 'AWS::Region'
+        - ':'
+        - !Ref 'AWS::AccountId'
+        - ':cluster/'
+        - Fn::ImportValue:
+            !Join [':', [!Ref 'StackName', 'ClusterName']]
+  PublicJenkinsURL:
+    Description: URL of proxy used to view Jenkins externally
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ProxyLoadBalancer
+          - DNSName
+        - /

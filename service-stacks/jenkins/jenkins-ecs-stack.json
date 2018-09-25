@@ -39,7 +39,7 @@
     "DockerImage": {
       "Description": "The docker image to use for Jenkins",
       "Type": "String",
-      "Default": "653748821319.dkr.ecr.ap-northeast-1.amazonaws.com/ct-jenkins:latest"
+      "Default": "301581106029.dkr.ecr.ap-northeast-1.amazonaws.com/jenkins:latest"
     }
   },
   "Mappings": {
